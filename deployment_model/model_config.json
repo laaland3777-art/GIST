@@ -1,0 +1,37 @@
+{
+    "target_col": "Risk",
+    "categorical_features": [
+        "Growth pattern",
+        "Ulcer"
+    ],
+    "numerical_features": [
+        "Length",
+        "TG/HDL",
+        "SII",
+        "LFF",
+        "VFA"
+    ],
+    "selected_features": [
+        "Growth pattern",
+        "Ulcer",
+        "Length",
+        "TG/HDL",
+        "SII",
+        "LFF",
+        "VFA"
+    ],
+    "weights": {
+        "logistic": 1,
+        "rf": 1,
+        "catboost": 1
+    },
+    "growth_pattern_mapping": {
+        "Endoluminal": 1,
+        "Exophytic": 2,
+        "Mixed": 3
+    },
+    "ulcer_mapping": {
+        "No": 0,
+        "Yes": 1
+    }
+}
