@@ -13,22 +13,22 @@ from sklearn.base import clone
 
 warnings.filterwarnings("ignore")
 
-# 页面配置
-st.set_page_config(page_title="Risk 预测模型", layout="centered")
+# Page configuration
+st.set_page_config(page_title="GIST Risk Prediction Model", layout="centered")
 
-st.title("🩺 疾病 Risk 预测系统")
-st.write("请输入患者的临床特征，系统将基于 Soft Voting 融合模型预测 Risk 概率。")
+st.title("🩺 GIST Risk Prediction Model")
+st.write("Please enter the patient's clinical features. The system will predict the risk probability based on a Soft Voting ensemble model.")
 
 # ==========================================
-# 核心改动：在云端动态训练模型，彻底告别 pkl 版本冲突！
+# Core modification: Train models dynamically in the cloud to avoid .pkl version conflicts!
 # ==========================================
-@st.cache_resource(show_spinner="正在初始化并训练模型，请稍候 (仅首次加载需要)...")
+@st.cache_resource(show_spinner="Initializing and training models, please wait (only required for the first load)...")
 def train_and_get_models():
     try:
-        # 1. 读取 GitHub 仓库里的数据文件
+        # 1. Read the data file from the GitHub repository
         df_train = pd.read_csv("train.csv")
     except FileNotFoundError:
-        st.error("❌ 找不到 `train.csv` 文件！请确保你已经将训练数据上传到了 GitHub 仓库中。")
+        st.error("❌ `train.csv` file not found! Please ensure you have uploaded the training data to the GitHub repository.")
         st.stop()
 
     target_col = "Risk"
@@ -40,7 +40,7 @@ def train_and_get_models():
     X_train = df_train[selected_features].copy()
     y_train = df_train[target_col].copy()
 
-    # 目标变量转成二分类
+    # Convert target variable to binary
     def normalize_binary_target(y):
         if y.dtype == 'object' or str(y.dtype) == 'category':
             y = y.astype(str).str.strip()
@@ -51,7 +51,7 @@ def train_and_get_models():
 
     y_train = normalize_binary_target(y_train)
 
-    # 2. 构建预处理管道
+    # 2. Build preprocessing pipelines
     numeric_preprocessor = Pipeline(steps=[
         ("imputer", SimpleImputer(strategy="median")),
         ("scaler", StandardScaler())
@@ -65,7 +65,7 @@ def train_and_get_models():
         ("cat", categorical_preprocessor, categorical_features)
     ])
 
-    # 3. 定义模型
+    # 3. Define models
     logistic_best = Pipeline([
         ("preprocessor", preprocessor),
         ("clf", LogisticRegression(C=0.01, solver="lbfgs", max_iter=5000, class_weight="balanced", random_state=42))
@@ -79,7 +79,7 @@ def train_and_get_models():
         ("clf", CatBoostClassifier(depth=6, iterations=100, learning_rate=0.1, verbose=0, random_state=42))
     ])
 
-    # 4. 训练模型
+    # 4. Train models
     models = {
         "Logistic Regression": clone(logistic_best),
         "Random Forest": clone(rf_best),
@@ -91,37 +91,37 @@ def train_and_get_models():
         
     return models
 
-# 加载模型 (调用上面的函数)
+# Load models (calls the function above)
 models = train_and_get_models()
 
 # ==========================================
-# 构建网页输入界面
+# Build Web UI
 # ==========================================
 st.markdown("---")
-st.subheader("📝 输入临床特征")
+st.subheader("📝 Input Clinical Features")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    growth_pattern_input = st.selectbox("Growth pattern (生长模式)", options=["Endoluminal", "Exophytic", "Mixed"])
-    ulcer_input = st.selectbox("Ulcer (溃疡)", options=["No", "Yes"])
-    length = st.number_input("Length", min_value=0.0, value=5.0, step=0.1)
+    growth_pattern_input = st.selectbox("Growth Pattern", options=["Endoluminal", "Exophytic", "Mixed"])
+    ulcer_input = st.selectbox("Ulcer", options=["No", "Yes"])
+    length = st.number_input("Length (cm)", min_value=0.0, value=5.0, step=0.1)
 
 with col2:
     tg_hdl = st.number_input("TG/HDL", min_value=0.0, value=1.0, step=0.1)
     sii = st.number_input("SII", min_value=0.0, value=500.0, step=10.0)
     lff = st.number_input("LFF", min_value=0.0, value=10.0, step=1.0)
-    vfa = st.number_input("VFA", min_value=0.0, value=100.0, step=1.0)
+    vfa = st.number_input("VFA (cm²)", min_value=0.0, value=100.0, step=1.0)
 
-# 变量映射
+# Variable mapping
 gp_mapping = {"Endoluminal": 1, "Exophytic": 2, "Mixed": 3}
 ulcer_mapping = {"No": 0, "Yes": 1}
 
 # ==========================================
-# 预测逻辑
+# Prediction Logic
 # ==========================================
-if st.button("🚀 开始预测 Risk", type="primary", use_container_width=True):
-    # 构建输入 DataFrame (强制转换为正确的类型)
+if st.button("🚀 Predict Risk", type="primary", use_container_width=True):
+    # Build input DataFrame (force correct types)
     input_data = pd.DataFrame({
         "Growth pattern": [int(gp_mapping[growth_pattern_input])],
         "Ulcer": [int(ulcer_mapping[ulcer_input])],
@@ -132,30 +132,30 @@ if st.button("🚀 开始预测 Risk", type="primary", use_container_width=True)
         "VFA": [float(vfa)]
     })
     
-    # Soft Voting 预测
+    # Soft Voting Prediction
     probas = []
     
     for name, model in models.items():
         proba = model.predict_proba(input_data)[:, 1][0]
         probas.append(proba)
         
-    # 计算加权平均概率 (权重均为1)
+    # Calculate weighted average probability (weights are all 1)
     final_proba = np.average(probas, weights=[1, 1, 1])
     
     st.markdown("---")
-    st.subheader("📊 预测结果")
+    st.subheader("📊 Prediction Results")
     
-    # 结果展示
+    # Display results
     if final_proba >= 0.5:
-        st.error(f"**高风险 (High Risk)**")
+        st.error(f"**High Risk**")
     else:
-        st.success(f"**低风险 (Low Risk)**")
+        st.success(f"**Low Risk**")
         
-    st.metric(label="Risk 发生概率", value=f"{final_proba * 100:.2f}%")
+    st.metric(label="Probability of High Risk", value=f"{final_proba * 100:.2f}%")
     st.progress(float(final_proba))
     
-    # 显示各个基模型的预测概率
-    with st.expander("查看各基模型预测详情"):
+    # Show individual base model prediction probabilities
+    with st.expander("View prediction details of base models"):
         st.write(f"- **Logistic Regression**: {probas[0]*100:.2f}%")
         st.write(f"- **Random Forest**: {probas[1]*100:.2f}%")
         st.write(f"- **CatBoost**: {probas[2]*100:.2f}%")
