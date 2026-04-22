@@ -6,9 +6,9 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import AdaBoostClassifier
 from catboost import CatBoostClassifier
+from sklearn.svm import SVC
 from sklearn.base import clone
 
 warnings.filterwarnings("ignore")
@@ -66,29 +66,46 @@ def train_and_get_models():
     ])
 
     # 3. Define models
-    logistic_best = Pipeline([
+    adaboost_best = Pipeline([
         ("preprocessor", preprocessor),
-        ("clf", LogisticRegression(C=0.01, solver="lbfgs", max_iter=5000, class_weight="balanced", random_state=42))
+        ("clf", AdaBoostClassifier(
+            n_estimators=100,
+            learning_rate=0.1,
+            random_state=42
+        ))
     ])
-    rf_best = Pipeline([
-        ("preprocessor", preprocessor),
-        ("clf", RandomForestClassifier(n_estimators=200, max_depth=3, min_samples_split=2, class_weight="balanced", random_state=42, n_jobs=-1))
-    ])
+
     catboost_best = Pipeline([
         ("preprocessor", preprocessor),
-        ("clf", CatBoostClassifier(depth=6, iterations=100, learning_rate=0.1, verbose=0, random_state=42))
+        ("clf", CatBoostClassifier(
+            depth=6,
+            iterations=100,
+            learning_rate=0.1,
+            verbose=0,
+            random_state=42
+        ))
+    ])
+
+    svm_best = Pipeline([
+        ("preprocessor", preprocessor),
+        ("clf", SVC(
+            C=1.0,
+            kernel="rbf",
+            probability=True,
+            random_state=42
+        ))
     ])
 
     # 4. Train models
     models = {
-        "Logistic Regression": clone(logistic_best),
-        "Random Forest": clone(rf_best),
-        "CatBoost": clone(catboost_best)
+        "AdaBoost": clone(adaboost_best),
+        "CatBoost": clone(catboost_best),
+        "SVM": clone(svm_best)
     }
-    
+
     for name, model in models.items():
         model.fit(X_train, y_train)
-        
+
     return models
 
 # Load models (calls the function above)
@@ -131,31 +148,31 @@ if st.button("🚀 Predict Risk", type="primary", use_container_width=True):
         "LFF": [float(lff)],
         "VFA": [float(vfa)]
     })
-    
+
     # Soft Voting Prediction
     probas = []
-    
+
     for name, model in models.items():
         proba = model.predict_proba(input_data)[:, 1][0]
         probas.append(proba)
-        
+
     # Calculate weighted average probability (weights are all 1)
     final_proba = np.average(probas, weights=[1, 1, 1])
-    
+
     st.markdown("---")
     st.subheader("📊 Prediction Results")
-    
+
     # Display results
     if final_proba >= 0.5:
         st.error(f"**High Risk**")
     else:
         st.success(f"**Low Risk**")
-        
+
     st.metric(label="Probability of High Risk", value=f"{final_proba * 100:.2f}%")
     st.progress(float(final_proba))
-    
+
     # Show individual base model prediction probabilities
     with st.expander("View prediction details of base models"):
-        st.write(f"- **Logistic Regression**: {probas[0]*100:.2f}%")
-        st.write(f"- **Random Forest**: {probas[1]*100:.2f}%")
-        st.write(f"- **CatBoost**: {probas[2]*100:.2f}%")
+        st.write(f"- **AdaBoost**: {probas[0]*100:.2f}%")
+        st.write(f"- **CatBoost**: {probas[1]*100:.2f}%")
+        st.write(f"- **SVM**: {probas[2]*100:.2f}%")
